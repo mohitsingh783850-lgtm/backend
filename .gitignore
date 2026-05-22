@@ -1,2 +1,25 @@
+# Database and Secret Keys (Crucial for security)
 .env
-/venv
+*.env
+
+# Python Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# Python Caches and Bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+
+# IDE / Editor Settings
+.vscode/
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db

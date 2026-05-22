@@ -75,49 +75,49 @@ def get_talent_by_id(talent_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# 2. Job Application Route (Updated with Sex and Age)
-@app.post("/apply")
-def apply_for_job(
-    first_name: str = Form(...),
-    last_name: str = Form(...),
-    email: str = Form(...),
-    phone: str = Form(...),
-    address: str = Form(...),
-    sex: str = Form(None),
-    age: int = Form(None),
-    education: str = Form(...),
-    skills: str = Form(...),
-    experience: str = Form(...),
-    qualities: str = Form(...),
-    additional_info: str = Form(None),
-    photo: UploadFile = File(...)
-):
-    try:
-        file_location = f"uploads/{photo.filename}"
-        with open(file_location, "wb+") as file_object:
-            file_object.write(photo.file.read())
+# # 2. Job Application Route
+# @app.post("/apply")
+# def apply_for_job(
+#     first_name: str = Form(...),
+#     last_name: str = Form(...),
+#     email: str = Form(...),
+#     phone: str = Form(...),
+#     address: str = Form(...),
+#     sex: str = Form(None),
+#     age: int = Form(None),
+#     education: str = Form(...),
+#     skills: str = Form(...),
+#     experience: str = Form(...),
+#     qualities: str = Form(...),
+#     additional_info: str = Form(None),
+#     photo: UploadFile = File(...)
+# ):
+#     try:
+#         file_location = f"uploads/{photo.filename}"
+#         with open(file_location, "wb+") as file_object:
+#             file_object.write(photo.file.read())
 
-        application_data = {
-            "first_name": first_name,
-            "last_name": last_name,
-            "email": email,
-            "phone": phone,
-            "address": address,
-            "sex": sex,
-            "age": age,
-            "education": education,
-            "skills": skills,
-            "experience": experience,
-            "qualities": qualities,
-            "additional_info": additional_info,
-            "photo_path": file_location,
-            "status": "pending"
-        }
+#         application_data = {
+#             "first_name": first_name,
+#             "last_name": last_name,
+#             "email": email,
+#             "phone": phone,
+#             "address": address,
+#             "sex": sex,
+#             "age": age,
+#             "education": education,
+#             "skills": skills,
+#             "experience": experience,
+#             "qualities": qualities,
+#             "additional_info": additional_info,
+#             "photo_path": file_location,
+#             "status": "pending"
+#         }
 
-        db.applications.insert_one(application_data)
-        return {"message": "Application Submitted!"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+#         db.applications.insert_one(application_data)
+#         return {"message": "Application Submitted!"}
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=str(e))
 
 # 3. Contact Message Route
 @app.post("/contact")

@@ -9,34 +9,41 @@ from datetime import datetime
 
 app = FastAPI()
 
-# 1. FIXED: CORS configuration (Added both localhost and 127.0.0.1 variants)
+# =====================================================================
+# 1. CORS Configuration
+# =====================================================================
 origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# Root verification endpoint
 @app.get("/")
 def read_root():
     return {"message": "welcome to my backend api!", "status": "running"}
 
+
+# Ensure local directory for uploads exists
 if not os.path.exists("uploads"):
     os.makedirs("uploads")
 
-# Collections
+# Collections Initializations
 requests_collection = get_collection("requests")
 messages_collection = get_collection("contact_messages")
 users_collection = get_collection("users")
 
 
-# 2. Talent Request Routes (FIXED: Cleaned up duplicates)
+# =====================================================================
+# 2. Talent Request Routes
+# =====================================================================
 @app.post("/submit", tags=["talent"])
 def submit_talent_legacy(payload: TalentRequest):
     try:
@@ -46,7 +53,7 @@ def submit_talent_legacy(payload: TalentRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/submit-talent", tags=["talent"]) 
-def submit_talent_request_new(payload: TalentRequest): # FIXED: Changed function name to be unique
+def submit_talent_request_new(payload: TalentRequest): 
     try:
         talent_data = payload.model_dump()
         result = requests_collection.insert_one(talent_data)
@@ -92,7 +99,9 @@ def get_talent_by_id(talent_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# =====================================================================
 # 3. Contact Message Route
+# =====================================================================
 @app.post("/contact")
 def send_contact_message(data: ContactMessage): 
     try:
@@ -102,7 +111,9 @@ def send_contact_message(data: ContactMessage):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# =====================================================================
 # 4. User Authentication Routes
+# =====================================================================
 @app.post("/register")
 def register(user: UserRegister):
     if users_collection.find_one({"email": user.email}):
@@ -134,17 +145,22 @@ def login(user: UserLogin):
     }
 
 
-# 5. Job Application Route
+# =====================================================================
+# 5. Job Application & Admin Control (Refined & Fixed)
+# =====================================================================
 @app.post("/api/applications", status_code=status.HTTP_201_CREATED)
 def submit_application(application: JobApplicationSchema): 
     try:
         application_dict = application.model_dump()
-        application_dict["createdAt"] = datetime.utcnow()
+        
+        # Anti-spam & workflow control values
         application_dict["status"] = "pending"
+        application_dict["isApproved"] = False  # Hidden from public view until flipped in Compass
+        application_dict["createdAt"] = datetime.utcnow().isoformat()
         
         result = applications_collection.insert_one(application_dict)
         return {
-            "message": "Application submitted successfully!",
+            "message": "Application submitted and pending admin review!",
             "applicationId": str(result.inserted_id)
         }
     except Exception as e:
@@ -153,3 +169,18 @@ def submit_application(application: JobApplicationSchema):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal Server Error. Could not store application."
         )
+
+@app.get("/api/public/job-openings")
+def get_live_jobs():
+    try:
+        # Strictly queries documents manually marked true in Compass
+        cursor = applications_collection.find({"isApproved": True})
+        
+        live_jobs = []
+        for job in cursor:
+            job["_id"] = str(job["_id"])
+            live_jobs.append(job)
+            
+        return {"status": "success", "data": live_jobs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

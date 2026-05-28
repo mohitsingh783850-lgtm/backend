@@ -9,18 +9,23 @@ from datetime import datetime
 
 app = FastAPI()
 
-@app.get("/")
-def read_root():
-    return {"message": "welcome to my backend api!", "status": "running"}
+# 1. FIXED: CORS configuration (Added both localhost and 127.0.0.1 variants)
+origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
 
-# CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/")
+def read_root():
+    return {"message": "welcome to my backend api!", "status": "running"}
 
 if not os.path.exists("uploads"):
     os.makedirs("uploads")
@@ -30,15 +35,29 @@ requests_collection = get_collection("requests")
 messages_collection = get_collection("contact_messages")
 users_collection = get_collection("users")
 
-# 1. Talent Request Route
+
+# 2. Talent Request Routes (FIXED: Cleaned up duplicates)
 @app.post("/submit", tags=["talent"])
-def submit_talent_request(payload: TalentRequest):
+def submit_talent_legacy(payload: TalentRequest):
     try:
-        # payload.model_dump() now automatically includes req_age, req_education, etc.
         result = requests_collection.insert_one(payload.model_dump())
         return {"message": "Success", "id": str(result.inserted_id)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/submit-talent", tags=["talent"]) 
+def submit_talent_request_new(payload: TalentRequest): # FIXED: Changed function name to be unique
+    try:
+        talent_data = payload.model_dump()
+        result = requests_collection.insert_one(talent_data)
+        return {
+            "status": "success",
+            "message": "Talent request received and saved!",
+            "id": str(result.inserted_id)
+        }
+    except Exception as e:
+        print(f"Error: {e}")
+        raise HTTPException(status_code=500, detail="Database insertion failed")
 
 @app.get("/get-talent", tags=["talent"])
 def get_talent():
@@ -65,59 +84,13 @@ def get_talent_by_id(talent_id: str):
             raise HTTPException(status_code=404, detail="Talent not found")
 
         talent["_id"] = str(talent["_id"])
-
         return {
             "status": "get talent detail successfully",
             "data": talent 
         }
-        
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# # 2. Job Application Route
-# @app.post("/apply")
-# def apply_for_job(
-#     first_name: str = Form(...),
-#     last_name: str = Form(...),
-#     email: str = Form(...),
-#     phone: str = Form(...),
-#     address: str = Form(...),
-#     sex: str = Form(None),
-#     age: int = Form(None),
-#     education: str = Form(...),
-#     skills: str = Form(...),
-#     experience: str = Form(...),
-#     qualities: str = Form(...),
-#     additional_info: str = Form(None),
-#     photo: UploadFile = File(...)
-# ):
-#     try:
-#         file_location = f"uploads/{photo.filename}"
-#         with open(file_location, "wb+") as file_object:
-#             file_object.write(photo.file.read())
-
-#         application_data = {
-#             "first_name": first_name,
-#             "last_name": last_name,
-#             "email": email,
-#             "phone": phone,
-#             "address": address,
-#             "sex": sex,
-#             "age": age,
-#             "education": education,
-#             "skills": skills,
-#             "experience": experience,
-#             "qualities": qualities,
-#             "additional_info": additional_info,
-#             "photo_path": file_location,
-#             "status": "pending"
-#         }
-
-#         db.applications.insert_one(application_data)
-#         return {"message": "Application Submitted!"}
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=str(e))
 
 # 3. Contact Message Route
 @app.post("/contact")
@@ -128,7 +101,8 @@ def send_contact_message(data: ContactMessage):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# 4. User Registration Route
+
+# 4. User Authentication Routes
 @app.post("/register")
 def register(user: UserRegister):
     if users_collection.find_one({"email": user.email}):
@@ -139,7 +113,6 @@ def register(user: UserRegister):
     users_collection.insert_one(user_dict)
     return {"message": "User created successfully"}
 
-# 5. User Login Route
 @app.post("/login")
 def login(user: UserLogin):
     db_user = users_collection.find_one({"email": user.email})
@@ -151,7 +124,6 @@ def login(user: UserLogin):
         )
     
     access_token = create_access_token(data={"sub": str(db_user["_id"]), "email": db_user["email"]})
-    
     return {
         "access_token": access_token, 
         "token_type": "bearer",
@@ -161,43 +133,20 @@ def login(user: UserLogin):
         }
     }
 
-@app.post("/submit-talent", tags=["talent"]) # Renamed to be more specific
-def submit_talent_request(payload: TalentRequest):
-    try:
-        # Convert Pydantic model to a dictionary for MongoDB
-        talent_data = payload.model_dump()
-        
-        # Insert into the "requests" collection
-        result = requests_collection.insert_one(talent_data)
-        
-        return {
-            "status": "success",
-            "message": "Talent request received and saved!",
-            "id": str(result.inserted_id)
-        }
-    except Exception as e:
-        # If MongoDB fails or data is bad, this will tell us why
-        print(f"Error: {e}")
-        raise HTTPException(status_code=500, detail="Database insertion failed")
 
+# 5. Job Application Route
 @app.post("/api/applications", status_code=status.HTTP_201_CREATED)
-def submit_application(application: JobApplicationSchema): # Dropped 'async' here
+def submit_application(application: JobApplicationSchema): 
     try:
-        # Convert Pydantic model data to a Python dictionary
         application_dict = application.model_dump()
-        
-        # Add server metadata
         application_dict["createdAt"] = datetime.utcnow()
         application_dict["status"] = "pending"
         
-        # Synchronous insert into MongoDB (no 'await' needed)
         result = applications_collection.insert_one(application_dict)
-        
         return {
             "message": "Application submitted successfully!",
             "applicationId": str(result.inserted_id)
         }
-        
     except Exception as e:
         print(f"Database insertion error: {e}")
         raise HTTPException(
